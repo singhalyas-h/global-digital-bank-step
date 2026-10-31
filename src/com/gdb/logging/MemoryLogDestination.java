@@ -1,28 +1,24 @@
 package com.gdb.logging;
 
 import com.gdb.command.TransactionCommand;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class MemoryLogDestination implements LogDestination {
-    private final List<TransactionCommand> logs = Collections.synchronizedList(new ArrayList<>());
+    private final List<TransactionCommand> commands = new ArrayList<>();
 
     @Override
     public void write(TransactionCommand cmd) {
-        logs.add(cmd);
+        commands.add(cmd);
     }
 
     @Override
     public List<TransactionCommand> readAll() {
-        synchronized (logs) {
-            return new ArrayList<>(logs);
-        }
+        return new ArrayList<>(commands);
     }
 
     @Override
     public void clear() {
-        logs.clear();
+        commands.clear();
     }
 
     @Override

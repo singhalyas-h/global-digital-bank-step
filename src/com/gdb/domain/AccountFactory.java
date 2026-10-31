@@ -1,22 +1,34 @@
 package com.gdb.domain;
 
+import com.gdb.exceptions.*;
+
+/**
+ * AccountFactory Creational Pattern supporting SAVINGS, CURRENT, and FIXEDDEPOSIT creation with dynamic rules.
+ */
 public class AccountFactory {
-    public static IAccount createAccount(int accountNumber, String name, int age, double initialBalance,
-            String accountType, int tenureYears) {
-        if (accountType == null) {
-            throw new IllegalArgumentException("Account type cannot be null");
-        }
-        return switch (accountType.toUpperCase()) {
-            case "SAVINGS" -> new SavingsAccount(accountNumber, name, age, initialBalance, "Savings", tenureYears);
-            case "CURRENT" -> new CurrentAccount(accountNumber, name, age, initialBalance, "Current");
-            case "SALARY" -> new SalaryAccount(accountNumber, name, age, initialBalance, "Salary");
-            case "FIXED_DEPOSIT" -> new FixedDepositAccount(accountNumber, name, age, initialBalance, "FIXED_DEPOSIT");
-            default -> throw new IllegalArgumentException("Unexpected value: " + accountType);
-        };
+
+    public static IAccount createAccount(String accountType, int accountNumber, String name, int age, double initialBalance)
+            throws AccountException {
+        return createAccount(accountType, accountNumber, name, age, initialBalance, 0);
     }
 
-    public static IAccount createAccount(int accountNumber, String name, int age, double initialBalance,
-            String accountType) {
-        return createAccount(accountNumber, name, age, initialBalance, accountType, 0);
+    public static IAccount createAccount(String accountType, int accountNumber, String name, int age, double initialBalance, int tenureYears)
+            throws AccountException {
+        if (accountType == null || accountType.trim().isEmpty()) {
+            throw new InvalidAccountTypeException("Unknown account type: " + accountType);
+        }
+        
+        String typeUpper = accountType.trim().toUpperCase();
+        
+        switch (typeUpper) {
+            case "SAVINGS":
+                return new SavingsAccount(accountNumber, name, age, initialBalance, tenureYears);
+            case "CURRENT":
+                return new CurrentAccount(accountNumber, name, age, initialBalance, tenureYears);
+            case "FIXEDDEPOSIT":
+                return new FixedDepositAccount(accountNumber, name, age, initialBalance, tenureYears);
+            default:
+                throw new InvalidAccountTypeException("Unknown account type: " + accountType);
+        }
     }
 }

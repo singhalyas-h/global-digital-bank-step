@@ -1,37 +1,85 @@
 package com.gdb.domain;
 
-import com.gdb.exceptions.InsufficientBalanceException;
-import com.gdb.exceptions.MinimumBalanceViolationException;
+import com.gdb.exceptions.*;
 
-public class CurrentAccount extends AbstractAccount {
-    private double overDraftLimit = 25000;
+/**
+ * Concrete CurrentAccount subclass extending Abstract Account and implementing IAccount.
+ * Dynamically queries AccountRulesEngine for minimum balance, interest rate, and overdraft facility.
+ */
+public class CurrentAccount extends Account {
+    private double overdraftUsed = 0.0;
 
-    public CurrentAccount(int accountNumber, String name, int age, double initialBalance, String accountType)
-            throws IllegalArgumentException {
-        super(accountNumber, name, age, initialBalance, "Current");
+    public CurrentAccount(int accountNumber, String name, int age, double initialBalance)
+            throws InvalidAgeException, MinimumBalanceViolationException {
+        this(accountNumber, name, age, initialBalance, 0);
+    }
+
+    public CurrentAccount(int accountNumber, String name, int age, double initialBalance, int tenureYears)
+            throws InvalidAgeException, MinimumBalanceViolationException {
+        super(accountNumber, name, age, initialBalance, tenureYears);
+        double minRequired = getMinimumBalance();
+        if (initialBalance < minRequired) {
+            throw new MinimumBalanceViolationException("Current account requires minimum balance of Rs. " + minRequired + ". Provided: Rs. " + initialBalance);
+        }
     }
 
     @Override
-    protected void processDebit(double amount) throws MinimumBalanceViolationException, InsufficientBalanceException {
-        if(amount > (super.getBalance() + this.getOverDraftLimit())){
-            throw new InsufficientBalanceException("Cannot withdraw. Withdrawal amount exceeds the balance and OverDraft Limit of "+this.getOverDraftLimit()+"\n");
+    public double getMinimumBalance() {
+        return AccountRulesEngine.getInstance().getMinimumBalance("CURRENT", tenureYears);
+    }
+
+    @Override
+    public String getAccountType() {
+        return "Current";
+    }
+
+    @Override
+    public double getInterestRate() {
+        return AccountRulesEngine.getInstance().getInterestRate("CURRENT", tenureYears);
+    }
+
+    public double getOverdraftLimit() {
+        Object val = AccountRulesEngine.getInstance().getAdditionalFeature("CURRENT", tenureYears, "overdraftLimit");
+        if (val instanceof Number) {
+            return ((Number) val).doubleValue();
         }
+        return 5000.0;
     }
 
     @Override
     public boolean canWithdraw(double amount) {
-        return amount > 0 && amount <= (super.getBalance() + this.overDraftLimit);
+        double maxWithdraw = balance - getMinimumBalance() + getOverdraftLimit() - overdraftUsed;
+        return amount <= maxWithdraw;
     }
 
-    public double getOverDraftLimit() {
-        return this.overDraftLimit;
-    }
+    @Override
+    public void withdraw(double amount, int pin) throws InactiveAccountException, InvalidPinException, InvalidAmountException, InsufficientBalanceException {
+        if (!"Active".equals(status)) throw new InactiveAccountException("Account is inactive.");
+        if (this.pin == null) throw new InvalidPinException("PIN not set for this account");
+        if (this.pin != pin) throw new InvalidPinException("Incorrect PIN");
+        if (amount <= 0) throw new InvalidAmountException("Amount must be positive. Provided: Rs. " + amount);
+        if (!canWithdraw(amount)) throw new InsufficientBalanceException("Withdrawal not allowed");
 
-    void setOverDraftLimit(double newLimit) {
-        if (newLimit >= 0) {
-            this.overDraftLimit = newLimit;
-        } else {
-            System.out.println("Overdraft limit cannot be negative.");
+        double minBal = getMinimumBalance();
+        double newBalance = balance - amount;
+        if (newBalance < minBal) {
+            double overdraftAmt = minBal - newBalance;
+            overdraftUsed += overdraftAmt;
         }
+        balance = newBalance;
+    }
+
+    public double getOverdraftUsed() { return overdraftUsed; }
+    public double getAvailableOverdraft() { return getOverdraftLimit() - overdraftUsed; }
+
+    public void repayOverdraft(double amount) throws InvalidAmountException, InsufficientBalanceException {
+        if (amount <= 0) throw new InvalidAmountException("Repayment amount must be positive");
+        if (amount > overdraftUsed) throw new InsufficientBalanceException("Repayment amount exceeds overdraft used");
+        overdraftUsed -= amount;
+        balance += amount;
+    }
+
+    public double getAvailableBalance() {
+        return balance - getMinimumBalance() + getOverdraftLimit() - overdraftUsed;
     }
 }

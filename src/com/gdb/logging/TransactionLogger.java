@@ -1,8 +1,12 @@
 package com.gdb.logging;
 
 import com.gdb.command.TransactionCommand;
+import java.util.Collections;
 import java.util.List;
 
+/**
+ * Bridge abstraction class decoupling high-level logger API from pluggable storage backends.
+ */
 public class TransactionLogger {
     protected LogDestination destination;
 
@@ -14,23 +18,26 @@ public class TransactionLogger {
         this.destination = destination;
     }
 
-    public LogDestination getDestination() {
-        return destination;
-    }
-
     public void log(TransactionCommand cmd) {
-        destination.write(cmd);
+        if (destination != null) {
+            destination.write(cmd);
+        }
     }
 
     public List<TransactionCommand> readAll() {
-        return destination.readAll();
+        if (destination != null) {
+            return destination.readAll();
+        }
+        return Collections.emptyList();
     }
 
     public void clear() {
-        destination.clear();
+        if (destination != null) {
+            destination.clear();
+        }
     }
 
     public String getDestinationName() {
-        return destination.getDestinationName();
+        return destination != null ? destination.getDestinationName() : "UNKNOWN";
     }
 }

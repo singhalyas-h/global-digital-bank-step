@@ -2,77 +2,60 @@ package com.gdb.logging;
 
 import com.gdb.command.TransactionCommand;
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class TransactionLog {
-    private static final String DEFAULT_FILE_PATH = "data/transactions.ser";
-    private final String filePath;
-
-    public TransactionLog() {
-        this(DEFAULT_FILE_PATH);
-    }
-
-    public TransactionLog(String filePath) {
-        this.filePath = filePath;
-    }
-
-    public void log(TransactionCommand cmd) {
-        File file = new File(filePath);
-        File parent = file.getParentFile();
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs();
-        }
-
-        boolean append = file.exists() && file.length() > 0;
-        try (OutputStream fos = new FileOutputStream(file, true);
-             ObjectOutputStream oos = append ? new AppendableObjectOutputStream(fos) : new ObjectOutputStream(fos)) {
-            oos.writeObject(cmd);
-            oos.flush();
-        } catch (IOException e) {
-            System.err.println("Error logging transaction command: " + e.getMessage());
-        }
-    }
-
-    public List<TransactionCommand> readAll() {
-        List<TransactionCommand> commands = new ArrayList<>();
-        File file = new File(filePath);
-        if (!file.exists() || file.length() == 0) {
-            return commands;
-        }
-
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
-            while (true) {
-                try {
-                    Object obj = ois.readObject();
-                    if (obj instanceof TransactionCommand cmd) {
-                        commands.add(cmd);
-                    }
-                } catch (EOFException e) {
-                    break;
-                }
-            }
-        } catch (IOException | ClassNotFoundException e) {
-            System.err.println("Error reading transaction log: " + e.getMessage());
-        }
-        return commands;
-    }
-
-    public void clear() {
-        File file = new File(filePath);
-        if (file.exists()) {
-            file.delete();
-        }
-    }
+    private static final String FILE_PATH = "data/transactions.ser";
 
     private static class AppendableObjectOutputStream extends ObjectOutputStream {
         public AppendableObjectOutputStream(OutputStream out) throws IOException {
             super(out);
         }
-
         @Override
         protected void writeStreamHeader() throws IOException {
-            reset();
+            // do not write header when appending to an existing stream
+        }
+    }
+
+    public synchronized void log(TransactionCommand cmd) throws IOException {
+        File file = new File(FILE_PATH);
+        if (file.getParentFile() != null && !file.getParentFile().exists()) {
+            file.getParentFile().mkdirs();
+        }
+        boolean isNewOrEmpty = !file.exists() || file.length() == 0;
+        try (ObjectOutputStream out = isNewOrEmpty
+                ? new ObjectOutputStream(new FileOutputStream(file))
+                : new AppendableObjectOutputStream(new FileOutputStream(file, true))) {
+            out.writeObject(cmd);
+            out.flush();
+        }
+    }
+
+    public synchronized List<TransactionCommand> readAll() throws IOException, ClassNotFoundException {
+        List<TransactionCommand> list = new ArrayList<>();
+        File file = new File(FILE_PATH);
+        if (!file.exists() || file.length() == 0) {
+            return list;
+        }
+        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(file))) {
+            while (true) {
+                try {
+                    Object obj = in.readObject();
+                    if (obj instanceof TransactionCommand) {
+                        list.add((TransactionCommand) obj);
+                    }
+                } catch (EOFException e) {
+                    break;
+                }
+            }
+        }
+        return list;
+    }
+
+    public synchronized void clear() {
+        File file = new File(FILE_PATH);
+        if (file.exists()) {
+            file.delete();
         }
     }
 }

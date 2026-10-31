@@ -8,10 +8,12 @@ import com.gdb.ui.AccountUI;
 
 public class Main {
     public static void main(String[] args) {
-        LogDestination logDestination = new FileLogDestination();
-        TransactionLogger logger = new TransactionLogger(logDestination);
-        AccountService accountService = new AccountService(logger);
-        AccountUI ui = new AccountUI(accountService);
+        System.out.println("Booting Global Digital Bank...");
+
+        LogDestination destination = new FileLogDestination();
+        TransactionLogger logger = new TransactionLogger(destination);
+        AccountService service = new AccountService(logger);
+        AccountUI ui = new AccountUI(service);
         ui.start();
     }
 }

@@ -16,8 +16,21 @@ src/com/gdb/
 │   ├── WithdrawCommand.java
 │   ├── TransferCommand.java
 │   └── TransactionCommand.java
-├── database/       # In-memory simulated persistence engine
+├── db/             # Connection providers (JDBC + HikariCP), schema init, data migration
+│   ├── ConnectionProvider.java
+│   ├── JdbcConnectionProvider.java
+│   ├── HikariConnectionProvider.java
+│   ├── SchemaInitializer.java
+│   ├── DataMigrator.java
 │   └── SimulatedDatabase.java
+├── file/           # CSV mapping, atomic writes, timestamped backups (Activity 26)
+│   ├── CsvMapper.java
+│   ├── AtomicFileWriter.java
+│   └── BackupManager.java
+├── repository/     # Repository pattern: in-memory, JDBC (SQLite) and file (CSV) backends
+│   ├── Account/TransactionRepository.java (interfaces)
+│   ├── InMemory*, Jdbc*, File* implementations
+│   └── RepositoryFactory.java
 ├── domain/         # Core banking entities, account hierarchies & rules engine
 │   ├── Account.java
 │   ├── AbstractAccount.java
@@ -105,7 +118,8 @@ src/com/gdb/
 
 - **Language**: Java 17+
 - **Configuration**: Java Properties (`.properties`)
-- **Persistence**: Binary Object Serialization (`.ser`) & In-Memory Store
+- **Persistence**: Switchable via `persistence.mode` (`memory` | `jdbc` | `file`): in-memory, SQLite over JDBC (HikariCP pooled), or CSV files with atomic writes and backups
+- **Libraries** (in `lib/`): HikariCP 5.0.1, sqlite-jdbc 3.44.1.0, slf4j 2.0.9
 - **Build / Run Tool**: `javac`, `java`, PowerShell / Bash
 
 ---
@@ -115,22 +129,37 @@ src/com/gdb/
 ### Windows (PowerShell)
 ```powershell
 New-Item bin -ItemType Directory -Force | Out-Null
-Copy-Item src\main\resources\config bin -Recurse -Force
-javac -encoding UTF-8 -d bin (Get-ChildItem -Recurse -Filter *.java src).FullName
-java "-Dfile.encoding=UTF-8" -cp bin com.gdb.tests.TestAccountUI
+Copy-Item src\main\resources\* bin -Recurse -Force
+javac -encoding UTF-8 -cp "lib/*" -d bin (Get-ChildItem -Recurse -Filter *.java src).FullName
+java "-Dfile.encoding=UTF-8" -cp "lib/*;bin" com.gdb.tests.TestAccountUI
 ```
 
 ### Run Interactive Console App
 ```powershell
-java "-Dfile.encoding=UTF-8" -cp bin com.gdb.Main
+java "-Dfile.encoding=UTF-8" -cp "lib/*;bin" com.gdb.Main
 ```
 
 ### Linux & macOS (Bash)
 ```bash
-mkdir -p bin && cp -r src/main/resources/config bin/
-javac -encoding UTF-8 -d bin $(find src -name "*.java")
-java -cp bin com.gdb.tests.TestAccountUI
+mkdir -p bin && cp -r src/main/resources/* bin/
+javac -encoding UTF-8 -cp "lib/*" -d bin $(find src -name "*.java")
+java -cp "lib/*:bin" com.gdb.tests.TestAccountUI
 
 # Interactive app:
-java -cp bin com.gdb.Main
+java -cp "lib/*:bin" com.gdb.Main
 ```
+
+---
+
+## 🗄️ Persistence Activities (24–26)
+
+| Activity | Topic | Key classes | Doc |
+|---|---|---|---|
+| 24 | JDBC transaction repository + data migration | `JdbcTransactionRepository`, `DataMigrator` | `docs/ACTIVITY_24.md` |
+| 25 | HikariCP connection pooling (NFR) | `HikariConnectionProvider` | `docs/ACTIVITY_25.md` |
+| 26 | CSV file repositories, atomic writes, backups | `FileAccountRepository`, `FileTransactionRepository`, `CsvMapper`, `AtomicFileWriter`, `BackupManager` | `docs/ACTIVITY_26.md` |
+
+Persistence is configured in `src/main/resources/config/persistence.properties`.
+Run the new tests with `com.gdb.tests.TestJdbcTransactionRepository`, `TestConnectionPooling` and `TestFileRepository`.
+
+> Pre-Activity-24 classes that depend on the old `Account` API (`AbstractAccount`, `SalaryAccount`, `AccountEnhanced`, the earlier test drivers and the old `database/SimulatedDatabase`) are kept in `legacy/` and are not compiled.

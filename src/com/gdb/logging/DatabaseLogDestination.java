@@ -1,11 +1,13 @@
 package com.gdb.logging;
 
 import com.gdb.command.TransactionCommand;
-import com.gdb.database.SimulatedDatabase;
-import java.util.ArrayList;
-import java.util.List;
+import com.gdb.db.SimulatedDatabase;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class DatabaseLogDestination implements LogDestination {
+    private static final String TABLE = "transaction_log";
+
     private final SimulatedDatabase db;
 
     public DatabaseLogDestination(SimulatedDatabase db) {
@@ -14,24 +16,24 @@ public class DatabaseLogDestination implements LogDestination {
 
     @Override
     public void write(TransactionCommand cmd) {
-        db.insert("transaction_log", cmd);
+        if (db != null) {
+            db.insert(TABLE, cmd);
+        }
     }
 
     @Override
     public List<TransactionCommand> readAll() {
-        List<Object> records = db.selectAll("transaction_log");
-        List<TransactionCommand> commands = new ArrayList<>();
-        for (Object record : records) {
-            if (record instanceof TransactionCommand cmd) {
-                commands.add(cmd);
-            }
-        }
-        return commands;
+        if (db == null) return Collections.emptyList();
+        return db.selectAll(TABLE).stream()
+                .map(o -> (TransactionCommand) o)
+                .collect(Collectors.toList());
     }
 
     @Override
     public void clear() {
-        db.deleteAll("transaction_log");
+        if (db != null) {
+            db.deleteAll(TABLE);
+        }
     }
 
     @Override

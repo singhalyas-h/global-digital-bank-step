@@ -1,19 +1,20 @@
 package com.gdb.service;
 
-import com.gdb.domain.Account;
-import com.gdb.domain.IAccount;
-import com.gdb.domain.Transaction;
-import com.gdb.domain.TransactionType;
+import com.gdb.domain.*;
 import com.gdb.exceptions.*;
 import java.time.LocalDateTime;
 
 public class TransferService {
 
-    public static void transfer(IAccount from, IAccount to, double amount, int pin) throws AccountException {
+    public TransferService() {
+    }
+
+    public void transfer(IAccount from, IAccount to, double amount, int pin)
+            throws AccountException {
         if (from == null || to == null) {
             throw new AccountException("Source and destination accounts are required");
         }
-        if (!"Active".equalsIgnoreCase(from.getStatus()) || !"Active".equalsIgnoreCase(to.getStatus())) {
+        if (!from.isActive() || !to.isActive()) {
             throw new InactiveAccountException("Both accounts must be active to transfer funds");
         }
         if (!from.verifyPin(pin)) {
@@ -22,21 +23,18 @@ public class TransferService {
         if (!from.canWithdraw(amount)) {
             throw new InsufficientBalanceException("Insufficient balance for transfer of Rs. " + amount);
         }
-        if (from instanceof Account sourceAccount) {
-            sourceAccount.resetDailyTransferIfNeeded();
-            if (!sourceAccount.canTransfer(amount)) {
-                double remaining = sourceAccount.getRemainingDailyTransferLimit();
-                throw new AccountException("Daily transfer limit exceeded. Remaining today: Rs. " + remaining);
-            }
+        Account source = (Account) from;
+        source.resetDailyTransferIfNeeded();
+        if (!source.canTransfer(amount)) {
+            throw new AccountException("Daily transfer limit exceeded. Remaining today: Rs. " + source.getRemainingDailyTransferLimit());
         }
         from.withdraw(amount, pin);
         to.deposit(amount);
-        if (from instanceof Account sourceAccount) {
-            sourceAccount.updateDailyTransferTotal(amount);
-        }
+        source.updateDailyTransferTotal(amount);
     }
 
-    public static Transaction transferWithTransaction(IAccount from, IAccount to, double amount, int pin) throws AccountException {
+    public Transaction transferWithTransaction(IAccount from, IAccount to, 
+                                               double amount, int pin) throws AccountException {
         transfer(from, to, amount, pin);
         return new Transaction(
             Transaction.generateId(),

@@ -1,67 +1,50 @@
 package com.gdb.domain;
 
-import com.gdb.exceptions.InactiveAccountException;
-import com.gdb.exceptions.InvalidAmountException;
-import com.gdb.exceptions.MinimumBalanceViolationException;
+import com.gdb.exceptions.*;
 
-public class SavingsAccount extends AbstractAccount {
-    private int tenureYears;
-    private double minBalance;
-    private double interestRate;
+/**
+ * Concrete SavingsAccount subclass extending Abstract Account and implementing IAccount.
+ * Dynamically queries AccountRulesEngine for minimum balance and interest rates based on tenure.
+ */
+public class SavingsAccount extends Account {
 
-    public SavingsAccount(int accountNumber, String name, int age, double initialBalance, String accountType,
-            int tenureYears) throws IllegalArgumentException {
-        super(accountNumber, name, age, initialBalance, "Savings", tenureYears);
-        this.tenureYears = tenureYears;
-        this.minBalance = AccountRulesEngine.getSavingsMinBalance(tenureYears);
-        this.interestRate = AccountRulesEngine.getSavingsInterestRate(tenureYears);
+    public SavingsAccount(int accountNumber, String name, int age, double initialBalance)
+            throws InvalidAgeException, MinimumBalanceViolationException {
+        this(accountNumber, name, age, initialBalance, 0);
     }
 
-    public SavingsAccount(int accountNumber, String name, int age, double initialBalance, String accountType)
-            throws IllegalArgumentException {
-        this(accountNumber, name, age, initialBalance, accountType, 0);
+    public SavingsAccount(int accountNumber, String name, int age, double initialBalance, int tenureYears)
+            throws InvalidAgeException, MinimumBalanceViolationException {
+        super(accountNumber, name, age, initialBalance, tenureYears);
+        double minRequired = getMinimumBalance();
+        if (initialBalance < minRequired) {
+            throw new MinimumBalanceViolationException("Savings account requires minimum balance of Rs. " + minRequired + ". Provided: Rs. " + initialBalance);
+        }
     }
 
     @Override
-    protected void processDebit(double amount) throws MinimumBalanceViolationException {
-        if ((super.getBalance() - amount) < this.minBalance) {
-            throw new MinimumBalanceViolationException(
-                    "Cannot withdraw. Minimum balance of \u20B9" + this.minBalance
-                            + " required. Available after withdrawal: \u20B9" + (this.getBalance() - amount));
-        }
+    public double getMinimumBalance() {
+        return AccountRulesEngine.getInstance().getMinimumBalance("SAVINGS", tenureYears);
+    }
+
+    @Override
+    public String getAccountType() {
+        return "Savings";
+    }
+
+    @Override
+    public double getInterestRate() {
+        return AccountRulesEngine.getInstance().getInterestRate("SAVINGS", tenureYears);
     }
 
     @Override
     public boolean canWithdraw(double amount) {
-        return amount > 0 && (getBalance() - amount) >= this.minBalance;
+        return (balance - amount) >= getMinimumBalance();
     }
 
-    public void applyInterest() {
-        double interest = this.getBalance() * (this.interestRate / 100);
-        try {
-            if (this.getBalance() < minBalance) {
-                throw new InvalidAmountException("Balance is below the minimum required for interest application.");
-            }
-            this.deposit(interest, super.getPin());
-        } catch (InactiveAccountException | InvalidAmountException e) {
-            System.out.println("Cannot apply interest: " + e.getMessage());
-        }
-    }
-
-    void getminBalance() {
-        System.out.println("Minimum Balance for the Savings Account is: " + this.minBalance);
-    }
-
-    public double getInterestRate() {
-        return this.interestRate;
-    }
-
-    public double getMinBalance() {
-        return this.minBalance;
-    }
-
-    @Override
-    public int getTenureYears() {
-        return this.tenureYears;
+    public void applyMonthlyInterest() {
+        double rate = getInterestRate();
+        double monthlyInterest = balance * (rate / 100.0) / 12.0;
+        balance += monthlyInterest;
     }
 }

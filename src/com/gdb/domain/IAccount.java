@@ -2,24 +2,47 @@ package com.gdb.domain;
 
 import com.gdb.exceptions.*;
 
+/**
+ * Enterprise Interface Contract defining standard public capabilities for all bank account implementations.
+ * Integrates dynamic rules engine lookup based on customer account tenure.
+ */
 public interface IAccount {
-    void deposit(double amount) throws InvalidAmountException, InactiveAccountException;
-    void deposit(double amount, Integer pin) throws InvalidAmountException, InactiveAccountException;
-    void withdraw(double amount) throws InvalidAmountException, InsufficientBalanceException, MinimumBalanceViolationException, InactiveAccountException, InvalidPinException, AccountException;
-    void withdraw(double amount, int pin) throws InvalidAmountException, InsufficientBalanceException, MinimumBalanceViolationException, InactiveAccountException, InvalidPinException, AccountException;
-    Transaction depositWithTransaction(double amount) throws InvalidAmountException, InactiveAccountException;
-    Transaction withdrawWithTransaction(double amount, int pin) throws InvalidAmountException, InsufficientBalanceException, MinimumBalanceViolationException, InactiveAccountException, InvalidPinException, AccountException;
+
+    void deposit(double amount) throws InactiveAccountException, InvalidAmountException;
+
+    void withdraw(double amount, int pin) throws InactiveAccountException, InvalidPinException, InvalidAmountException, InsufficientBalanceException;
+
     double getBalance();
+
     int getAccountNumber();
-    String getName();
-    int getAge();
+
+    String getAccountHolderName();
+
     String getAccountType();
-    String getStatus();
-    void setPin(int pin) throws IllegalArgumentException;
-    boolean verifyPin(int pin);
-    boolean hasPin();
-    void closeAccount() throws IllegalStateException;
-    void reopenAccount() throws IllegalStateException;
+
+    String getOpeningDate();
+
+    boolean isActive();
+
+    double getMinimumBalance();
+
+    double getInterestRate();
+
     boolean canWithdraw(double amount);
+
+    void setPin(int pin) throws InvalidPinException;
+
+    boolean verifyPin(int pin);
+
+    boolean hasPin();
+
+    void closeAccount() throws InactiveAccountException;
+
+    void reopenAccount() throws InactiveAccountException;
+
+    String getAccountInfo();
+
     int getTenureYears();
+
+    void setTenureYears(int tenureYears);
 }

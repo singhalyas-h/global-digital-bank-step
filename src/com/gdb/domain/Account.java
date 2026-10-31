@@ -1,235 +1,119 @@
 package com.gdb.domain;
 
 import com.gdb.exceptions.*;
-import java.io.Serializable;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-public class Account implements IAccount, Serializable {
+/**
+ * Abstract class Account implementing default behavior for IAccount interface.
+ * Encapsulates common state fields, customer tenure, and default validation routines.
+ */
+public abstract class Account implements IAccount, java.io.Serializable {
     private static final long serialVersionUID = 1L;
+    protected int accountNumber;
+    protected String accountHolderName;
+    protected int age;
+    protected double balance;
+    protected String status;
+    protected Integer pin;
+    protected String openingDate;
+    protected int tenureYears;
 
-    private static final double MIN_BALANCE_SAVINGS = 500.0;
-    private static final double MIN_BALANCE_CURRENT = 1000.0;
-    private static final int MIN_AGE = 18;
-    private static final int MIN_PIN = 1000;
-    private static final int MAX_PIN = 9999;
+    protected double dailyTransferTotal = 0.0;
+    protected LocalDateTime lastTransferDate = LocalDateTime.now();
 
-    private int accountNumber;
-    private String name;
-    private int age;
-    private double balance;
-    private String accountType;
-    private String status;
-    private Integer pin;
+    public Account(int accountNumber, String name, int age, double initialBalance) throws InvalidAgeException {
+        this(accountNumber, name, age, initialBalance, 0);
+    }
 
-    protected int tenureYears = 0;
-    private double dailyTransferTotal = 0.0;
-    private LocalDateTime lastTransferDate = LocalDateTime.now();
-
-    public Account(int accountNumber, String name, int age, double initialBalance, String accountType, int tenureYears)
-            throws IllegalArgumentException {
-        if (age < MIN_AGE) {
-            throw new IllegalArgumentException("Customer must be at least 18 years old. Provided: " + age);
+    public Account(int accountNumber, String name, int age, double initialBalance, int tenureYears) throws InvalidAgeException {
+        if (age < 18) {
+            throw new InvalidAgeException("Customer must be at least 18 years old. Provided: " + age);
         }
-        if (!"Savings".equalsIgnoreCase(accountType) && !"Current".equalsIgnoreCase(accountType) && !"FIXED_DEPOSIT".equalsIgnoreCase(accountType) && !"SALARY".equalsIgnoreCase(accountType)) {
-            throw new IllegalArgumentException("Account type must be 'Savings' or 'Current'. Provided: " + accountType);
-        }
-        double minBalance = "Savings".equalsIgnoreCase(accountType) ? MIN_BALANCE_SAVINGS : ("Current".equalsIgnoreCase(accountType) ? MIN_BALANCE_CURRENT : 0.0);
-        if (initialBalance < minBalance) {
-            throw new IllegalArgumentException(accountType + " account requires minimum balance of \u20B9" + minBalance + ". Provided: \u20B9" + initialBalance);
+        if (name == null || name.trim().isEmpty()) {
+            throw new InvalidAgeException("Name cannot be empty");
         }
 
         this.accountNumber = accountNumber;
-        this.name = name;
+        this.accountHolderName = name;
         this.age = age;
         this.balance = initialBalance;
-        this.accountType = accountType;
         this.status = "Active";
         this.pin = null;
-        this.tenureYears = tenureYears;
-        this.dailyTransferTotal = 0.0;
-        this.lastTransferDate = LocalDateTime.now();
+        this.openingDate = "2026-08-28";
+        this.tenureYears = Math.max(0, tenureYears);
     }
 
-    public Account(int accountNumber, String name, int age, double initialBalance, String accountType)
-            throws IllegalArgumentException {
-        this(accountNumber, name, age, initialBalance, accountType, 0);
-    }
-
-    public void deposit(double amount) throws InvalidAmountException, InactiveAccountException {
-        deposit(amount, this.pin);
-    }
-
-    public void deposit(double amount, Integer pin) throws InvalidAmountException, InactiveAccountException {
-        validateActive();
+    @Override
+    public void deposit(double amount) throws InactiveAccountException, InvalidAmountException {
+        if (!"Active".equals(status)) {
+            throw new InactiveAccountException("Account is inactive.");
+        }
         if (amount <= 0) {
-            throw new InvalidAmountException("Deposit amount must be positive. Provided: \u20B9" + amount);
+            throw new InvalidAmountException("Deposit amount must be positive. Provided: Rs. " + amount);
         }
-        this.balance += amount;
+        balance += amount;
     }
 
-    public Transaction depositWithTransaction(double amount) throws InvalidAmountException, InactiveAccountException {
-        deposit(amount);
-        return new Transaction(
-            Transaction.generateId(),
-            LocalDateTime.now(),
-            this.accountNumber,
-            TransactionType.DEPOSIT,
-            amount,
-            this.balance,
-            "SUCCESS",
-            "Deposit of Rs. " + amount,
-            0,
-            0
-        );
-    }
-
-    public void withdraw(double amount) throws InvalidAmountException, InsufficientBalanceException,
-            MinimumBalanceViolationException, InactiveAccountException, InvalidPinException, AccountException {
-        if (getPin() == null) {
+    @Override
+    public void withdraw(double amount, int pin) throws InactiveAccountException, InvalidPinException, InvalidAmountException, InsufficientBalanceException {
+        if (!"Active".equals(status)) {
+            throw new InactiveAccountException("Account is inactive.");
+        }
+        if (this.pin == null) {
             throw new InvalidPinException("PIN not set for this account");
         }
-        withdraw(amount, getPin());
-    }
-
-    public void withdraw(double amount, int pin) throws InvalidAmountException, InsufficientBalanceException,
-            MinimumBalanceViolationException, InactiveAccountException, InvalidPinException, AccountException {
-        validateActive();
-        if (getPin() == null) {
-            throw new InvalidPinException("PIN not set for this account");
-        }
-        if (!verifyPin(pin)) {
+        if (this.pin != pin) {
             throw new InvalidPinException("Incorrect PIN");
         }
         if (amount <= 0) {
-            throw new InvalidAmountException("Withdraw amount must be positive. Provided: \u20B9" + amount);
+            throw new InvalidAmountException("Amount must be positive. Provided: Rs. " + amount);
         }
-        processDebit(amount);
-        this.balance -= amount;
+        if (!canWithdraw(amount)) {
+            throw new InsufficientBalanceException("Withdrawal not allowed");
+        }
+        balance -= amount;
     }
 
-    public Transaction withdrawWithTransaction(double amount, int pin) throws InvalidAmountException,
-            InsufficientBalanceException, MinimumBalanceViolationException, InactiveAccountException,
-            InvalidPinException, AccountException {
-        withdraw(amount, pin);
-        return new Transaction(
-            Transaction.generateId(),
-            LocalDateTime.now(),
-            this.accountNumber,
-            TransactionType.WITHDRAW,
-            amount,
-            this.balance,
-            "SUCCESS",
-            "Withdrawal of Rs. " + amount,
-            0,
-            0
-        );
+    @Override
+    public void closeAccount() throws InactiveAccountException {
+        if (!"Active".equals(status)) {
+            throw new InactiveAccountException("Account is already closed / inactive.");
+        }
+        status = "Inactive";
     }
 
-    protected void processDebit(double amount)
-            throws MinimumBalanceViolationException, InsufficientBalanceException, AccountException {
-        if (amount > this.balance) {
-            throw new InsufficientBalanceException("Insufficient balance. Available: \u20B9" + this.balance + ", Requested: \u20B9" + amount);
+    @Override
+    public void reopenAccount() throws InactiveAccountException {
+        if ("Active".equals(status)) {
+            throw new InactiveAccountException("Account is already active.");
         }
-        if ((this.balance - amount) < getMinimumBalance()) {
-            throw new MinimumBalanceViolationException("Cannot withdraw. Minimum balance of \u20B9" + getMinimumBalance() + " required. Available after withdrawal: \u20B9" + (this.balance - amount));
-        }
+        status = "Active";
     }
 
-    public void closeAccount() throws IllegalStateException {
-        if ("Inactive".equals(this.status)) {
-            throw new IllegalStateException("Account is already closed");
-        }
-        this.status = "Inactive";
-    }
-
-    public void reopenAccount() throws IllegalStateException {
-        if ("Active".equals(this.status)) {
-            throw new IllegalStateException("Account is already active");
-        }
-        this.status = "Active";
-    }
-
-    public void setPin(int pin) throws IllegalArgumentException {
-        if (pin < MIN_PIN || pin > MAX_PIN) {
-            throw new IllegalArgumentException("PIN must be a 4-digit number (1000-9999). Provided: " + pin);
+    @Override
+    public void setPin(int pin) throws InvalidPinException {
+        if (pin < 1000 || pin > 9999) {
+            throw new InvalidPinException("PIN must be a 4-digit number (1000-9999). Provided: " + pin);
         }
         this.pin = pin;
     }
 
-    public boolean verifyPin(int pin) {
-        return this.pin != null && this.pin == pin;
+    @Override public boolean verifyPin(int pin) { return this.pin != null && this.pin == pin; }
+    @Override public boolean hasPin() { return pin != null; }
+    @Override public boolean isActive() { return "Active".equals(status); }
+
+    @Override
+    public String getAccountInfo() {
+        return "Account #" + accountNumber + " | " + accountHolderName + " (" + age + " yrs, Tenure: " + tenureYears + " yrs) | " +
+               getAccountType() + " | Rs. " + balance + " | " + status;
     }
 
-    public boolean hasPin() {
-        return this.pin != null;
-    }
-
-    double getMinimumBalance() {
-        if ("Savings".equalsIgnoreCase(this.accountType)) {
-            return MIN_BALANCE_SAVINGS;
-        } else if ("Current".equalsIgnoreCase(this.accountType)) {
-            return MIN_BALANCE_CURRENT;
-        }
-        return 0.0;
-    }
-
-    public void validateActive() throws InactiveAccountException {
-        if (!"Active".equals(this.status)) {
-            throw new InactiveAccountException("Account is inactive. Please reopen the account or contact support.");
-        }
-    }
-
-    public int getAccountNumber() {
-        return accountNumber;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public int getAge() {
-        return age;
-    }
-
-    public double getBalance() {
-        return balance;
-    }
-
-    public String getAccountType() {
-        return accountType;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public Integer getPin() {
-        return pin;
-    }
-
-    public int getTenureYears() {
-        return this.tenureYears;
-    }
-
-    public void setTenureYears(int tenureYears) {
-        this.tenureYears = tenureYears;
-    }
-
-    public double getDailyTransferTotal() {
-        return dailyTransferTotal;
-    }
-
-    public LocalDateTime getLastTransferDate() {
-        return lastTransferDate;
-    }
-
-    public void resetDailyTransferIfNeeded() {
-        if (lastTransferDate == null || !lastTransferDate.toLocalDate().equals(LocalDate.now())) {
-            this.dailyTransferTotal = 0.0;
-            this.lastTransferDate = LocalDateTime.now();
-        }
-    }
+    @Override public int getAccountNumber() { return accountNumber; }
+    @Override public String getAccountHolderName() { return accountHolderName; }
+    @Override public double getBalance() { return balance; }
+    @Override public String getOpeningDate() { return openingDate; }
+    @Override public int getTenureYears() { return tenureYears; }
+    @Override public void setTenureYears(int tenureYears) { this.tenureYears = Math.max(0, tenureYears); }
 
     public double getDailyTransferLimit() {
         return AccountRulesEngine.getInstance().getDailyTransferLimit(getAccountType(), getTenureYears());
@@ -247,16 +131,38 @@ public class Account implements IAccount, Serializable {
 
     public void updateDailyTransferTotal(double amount) {
         resetDailyTransferIfNeeded();
-        this.dailyTransferTotal += amount;
-        this.lastTransferDate = LocalDateTime.now();
+        dailyTransferTotal += amount;
+        lastTransferDate = LocalDateTime.now();
     }
 
-    public boolean canWithdraw(double amount) {
-        return amount > 0 && (this.balance - amount) >= getMinimumBalance();
+    public void resetDailyTransferIfNeeded() {
+        if (lastTransferDate == null || !lastTransferDate.toLocalDate().equals(LocalDateTime.now().toLocalDate())) {
+            dailyTransferTotal = 0.0;
+            lastTransferDate = LocalDateTime.now();
+        }
     }
 
-    @Override
-    public String toString() {
-        return "Account #" + accountNumber + " | " + name + " (" + age + " yrs, Tenure: " + getTenureYears() + " yrs) | " + accountType + " | Rs. " + balance + " | " + status;
+    public double getDailyTransferTotal() { return dailyTransferTotal; }
+    public LocalDateTime getLastTransferDate() { return lastTransferDate; }
+
+    protected Transaction buildTransaction(TransactionType type, double amount, 
+                                           int fromAcc, int toAcc, String desc) {
+        return new Transaction(
+            Transaction.generateId(),
+            LocalDateTime.now(),
+            this.accountNumber,
+            type, amount, this.balance, "SUCCESS",
+            desc, fromAcc, toAcc
+        );
+    }
+
+    public Transaction depositWithTransaction(double amount) throws AccountException {
+        deposit(amount);
+        return buildTransaction(TransactionType.DEPOSIT, amount, 0, 0, "Deposit of Rs. " + amount);
+    }
+
+    public Transaction withdrawWithTransaction(double amount, int pin) throws AccountException {
+        withdraw(amount, pin);
+        return buildTransaction(TransactionType.WITHDRAW, amount, 0, 0, "Withdrawal of Rs. " + amount);
     }
 }

@@ -1,17 +1,18 @@
 package com.gdb.command;
 
 import com.gdb.domain.Account;
+import com.gdb.domain.IAccount;
 import com.gdb.domain.Transaction;
 
 public class WithdrawCommand implements TransactionCommand {
     private static final long serialVersionUID = 1L;
 
-    private Account account;
+    private IAccount account;
     private double amount;
     private int pin;
     private Transaction transaction;
 
-    public WithdrawCommand(Account account, double amount, int pin) {
+    public WithdrawCommand(IAccount account, double amount, int pin) {
         this.account = account;
         this.amount = amount;
         this.pin = pin;
@@ -19,23 +20,15 @@ public class WithdrawCommand implements TransactionCommand {
 
     @Override
     public void execute() throws Exception {
-        this.transaction = account.withdrawWithTransaction(amount, pin);
+        if (account instanceof Account) {
+            this.transaction = ((Account) account).withdrawWithTransaction(amount, pin);
+        } else {
+            account.withdraw(amount, pin);
+        }
     }
 
     @Override
     public Transaction getTransaction() {
         return this.transaction;
-    }
-
-    public Account getAccount() {
-        return account;
-    }
-
-    public double getAmount() {
-        return amount;
-    }
-
-    public int getPin() {
-        return pin;
     }
 }
